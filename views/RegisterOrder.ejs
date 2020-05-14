@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang = "en">
+<head>
+    <meta charset = "UTF-8">
+    <title> Order Registration </title>
+</head>
+<body>
+<form method = "POST">
+    <div>Register Order</div>
+    <div>
+        <label for = "date"> Order Date: </label>
+        <!input type = "text" name = "date" placeholder = "yyyy-mm-dd">
+        <input type="date" id="date" name="date">
+    </div>
+    <div>
+        <label for = "location"> Delivery Point: </label>
+        <input type = "text" name = "location">
+    </div>
+    <div>
+        <label for = "driver"> Driver: </label>
+        <select id="driver" name ="driver">
+            <option value=''> Select</option>
+            <% driverList.forEach((row)=>{ %>
+                <option value = "<%= row%>"> <%=row %> </option>
+            <% }) %>
+        </select>
+    </div>
+    <div>
+        <label for = "pork"> Pork Meat: </label>
+        <select id="pork" name ="pork">
+            <option value=''> Select</option>
+            <option value="Pork Belly">Pork Belly</option>
+            <option value="Pork Throat">Pork Throat</option>
+            <option value="Pork Neck">Pork Neck</option>
+        </select>
+        <input type = "text" name = "weight" size ="1">
+        <label for = "weight"> kg </label>
+    </div>
+    <button type = "submit" name = "button" value = "Confirm">Register Order</button>
+    <button type = "submit" name = "button" value = "Cancel">Cancel</button>
+</form>
+</body>
+</html>
