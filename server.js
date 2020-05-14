@@ -166,17 +166,11 @@ app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({extended:true}));
 app.use(bodyParser.json());
 
-// app.use(express.static(__dirname+"/views"));
-
-// let driverName = "";
-
 let temp_date = new Date();
 
 let db_date = temp_date.getFullYear() + '/' + parseInt(temp_date.getMonth()+1) + '/' +
     temp_date.getDate() + " " + temp_date.getHours() + ":" + temp_date.getMinutes() + ":" +
     temp_date.getSeconds();
-
-// let orderNumber = "";
 
 mongoose.connect('mongodb://localhost:27017/testDB');
 const db = mongoose.connection;
@@ -209,9 +203,9 @@ const driverLocation = new mongoose.Schema({
 
 const model = mongoose.model("Register", registerSchema, 'register');
 const modelOrder = mongoose.model( "Order", orderSchema, 'order');
-const modelStart = mongoose.model( "TransportStartTime", driverLocation, 'driverLocation');
-const modelDone = mongoose.model( "TransportDoneTime", driverLocation, 'driverLocation');
-const modelReturn = mongoose.model( "ReturnTime", driverLocation, 'driverLocation');
+// const modelStart = mongoose.model( "TransportStartTime", driverLocation, 'driverLocation');
+// const modelDone = mongoose.model( "TransportDoneTime", driverLocation, 'driverLocation');
+// const modelReturn = mongoose.model( "ReturnTime", driverLocation, 'driverLocation');
 
 // Renders first login page
 app.get('/', (req, res) => {
@@ -276,7 +270,12 @@ app.get('/checkOrder', (req, res) => {
 
     OrderContract.methods.GetOrderInfo(orderNumber).call().then((result) => {
         let orderInfo = result;
-        res.render('CheckOrder', {date: orderInfo[0], location: orderInfo[1], time: orderInfo[2], driver: orderInfo[3], pork: orderInfo[4], weight: orderInfo[5]});
+
+        let time = orderInfo[2];
+        if (time === "0") {
+            time = "Driver has yet to confirm the order";
+        }
+        res.render('CheckOrder', {ordernumber: orderNumber, date: orderInfo[0], location: orderInfo[1], time: time, driver: orderInfo[3], pork: orderInfo[4], weight: orderInfo[5]});
     });
 });
 
@@ -359,27 +358,30 @@ app.post('/registerOrder', (req, res) => {
         registerForm.pork = req.body.pork;
         registerForm.weight = req.body.weight;
 
-        let randomNumber = Math.floor(Math.random() * 100) + 1;
+        console.log("Register Form DATE: " + registerForm.date);
+        console.log("Register Form LOCATION: " + registerForm.location);
+        console.log("Register Form DRIVER: " + registerForm.driver);
+        console.log("Register Form PORK: " + registerForm.pork);
+        console.log("Register Form WEIGHT: " + registerForm.weight);
+
+        let randomNumber = Math.floor(Math.random() * 1000000) + 1;
 
         registerForm.orderID = randomNumber.toString();
 
-        let ifExists = false;
+        console.log("Random number is " + registerForm.orderID);
 
-        while (ifExists) {
-            model.exists({ orderID: registerForm.orderID }, (err, item) => {
-                if (err) {
-                    console.log("MongoDB error: " + err);
-                    return false;
-                }
-                if (!item) {
-                    ifExists = true;
-                }
-                else {
-                    randomNumber = Math.floor(Math.random() * 100) + 1;
-                    registerForm.orderID = randomNumber.toString();
-                }
-            });
-        }
+        modelOrder.exists({ orderID: registerForm.orderID }, (err, item) => {
+            if (err) {
+                console.log("MongoDB error: " + err);
+                return false;
+            }
+            if (item) {
+                console.log("Found already existing orderID, please buy lotto");
+                randomNumber = Math.floor(Math.random() * 1000000) + 1;
+                registerForm.orderID = randomNumber.toString();
+                console.log("New random orderID is " + registerForm.orderID);
+            }
+        });
 
         console.log("Order ID = " + registerForm.orderID);
 
@@ -389,20 +391,27 @@ app.post('/registerOrder', (req, res) => {
             return;
         }
 
-        // if (!Number.isInteger(registerForm.weight) || registerForm.weight <= 0 || registerForm.weight >= Number.MAX_VALUE) {
-        //     res.send('<script type="text/javascript">alert("Form error, weight input is wrong"); window.location=history.back(); </script>');
-        //     return;
-        // }
+        if (isNaN(registerForm.weight)) {
+            res.send('<script type="text/javascript">alert("Form error, weight input is not a number"); window.location=history.back(); </script>');
+            return;
+        }
+        let weight = parseInt(registerForm.weight, 10);
+        if (weight <= 0 || weight >= 100000) {
+            res.send('<script type="text/javascript">alert("Form error, weight input is wrong"); window.location=history.back(); </script>');
+            return;
+        }
 
         registerForm.save((err) => {
             if(err) {
                 console.error(err);
                 res.send('<script type="text/javascript">alert("Form error"); window.location=history.back(); </script>');
-                // res.send("Form Error");
                 return;
             }
-            // res.send("Form is registered");
-            res.send('<script type="text/javascript">alert("Form is registered"); window.location="/"; </script>');
+        });
+
+        model.findOne({username: registerForm.driver}, (err, doc) => {
+            doc.status = "accepted";
+            doc.save();
         });
 
         OrderContract.methods.SetOrderInfo(registerForm.orderID, String(registerForm.date), registerForm.location, String("0"), registerForm.driver, registerForm.pork, registerForm.weight).send({
@@ -411,11 +420,29 @@ app.post('/registerOrder', (req, res) => {
             gasPrice: 200,
             value: 0
         });
+
+        res.redirect('/confirm?driverName=' + registerForm.driver);
     }
     if (inputValue === "Cancel") {
         res.redirect('/');
     }
 });
+
+app.get('/confirm', (req, res) => {
+    let driverName = req.query.driverName;
+    modelOrder.findOne({driver: driverName}, (err, obj) => {
+        res.render('Confirm', {ordernumber: obj.orderID, date: obj.date, location: obj.location, time: obj.time, driver: obj.driver, pork: obj.pork, weight: obj.weight});
+    });
+});
+
+app.post('/confirm', (req, res) => {
+    let inputValue = req.body.button;
+    if (inputValue === 'Back') {
+        res.redirect('/');
+    }
+});
+
+
 
 // Renders post request for /driver page
 app.post('/driver', (req, res) => {
@@ -431,7 +458,7 @@ app.post('/driver', (req, res) => {
         let state = obj.status;
 
         if (inputValue === "Assign") {
-           if (state !== "ready") {
+           if (state !== "accepted") {
                // res.send("This driver has no assignments to confirm!");
                res.send('<script type="text/javascript">alert("This driver has no assignments to confirm!"); window.location=history.back(); </script>');
                return;
@@ -469,9 +496,10 @@ app.post('/driver', (req, res) => {
     });
 });
 
-// Renders driver/assign page
 app.get('/driver/assign', (req, res) => {
     let driverName = req.query.driverName;
+    let ts = Date.now();
+    let tstring = Date(ts);
 
     modelOrder.findOne({driver: driverName}, (err, obj) => {
         if (obj === null) {
@@ -485,32 +513,46 @@ app.get('/driver/assign', (req, res) => {
         let pork = obj.pork;
         let weight = obj.weight;
 
-        res.render('Assign', {date:date, location:location, driver:driver, pork:pork, weight:weight});
+        res.render('Assign', {date:date, location:location, time: tstring, driver:driver, pork:pork, weight:weight});
+    });
 
-        app.post('/driver/assign', (req2, res2) => {
-            model.findOne({username: driverName}, (err2, doc2) => {
-                doc2.status = "confirmed";
-                doc2.save();
-
-                // Interaction with smart contract?
-                // res2.send("Order confirmed!");
-
-                // res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location="/driver"; </script>');
-                res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location=history.go(-2); </script>');
-                // res2.redirect('/driver?driverName=' + driverName);
-            });
+    app.post('/driver/assign', (req2, res2) => {
+        driverName = req2.query.driverName;
+        model.findOne({username: driverName}, (err, doc) => {
+            doc.status = "confirmed";
+            doc.save();
         });
+
+        modelOrder.findOne({driver: driverName}, (err, obj) => {
+            let orderID = obj.orderID;
+
+            OrderContract.methods.GetOrderInfo(orderID).call().then((result) => {
+                let orderInfo = result;
+
+                OrderContract.methods.SetOrderInfo(orderID, orderInfo[0], orderInfo[1], tstring, orderInfo[3], orderInfo[4], orderInfo[5]).send({
+                    from: '0xE9e344599890319B89c36ccc83070971fB48e776',
+                    gas:'200000',
+                    gasPrice: 200,
+                    value: 0
+                });
+                console.log("Driver assign uploaded to blockchain with OrderID " + orderID);
+            });
+        // res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location="/driver"; </script>');
+        console.log("Order confirmed for " + driverName);
+        });
+        res2.redirect('/driver?driverName=' + driverName);
     });
 });
 
 // Renders driver/transportStart page
 app.get('/driver/transportStart', (req, res) => {
     let driverName = req.query.driverName;
+    let ts = Date.now();
+    let tstring = Date(ts);
 
     modelOrder.findOne({driver: driverName}, (err, obj) => {
         if (obj === null) {
             res.send('<script type="text/javascript">alert("No transport ready!"); window.location=history.back(); </script>');
-            // res.send("No transport ready!");
             return;
         }
 
@@ -519,46 +561,47 @@ app.get('/driver/transportStart', (req, res) => {
         let driver = obj.driver;
         let pork = obj.pork;
         let weight = obj.weight;
-        let ts = Date.now();
-        let tstring = Date(ts);
 
         res.render('TransportStart', {date: date, location: location, time: tstring, driver: driver, pork: pork, weight: weight});
-
-        app.post('/driver/transportStart', (req2, res2) => {
-            model.findOne({username: driverName}, (err2, doc2) => {
-                doc2.status = "driving";
-                doc2.save();
-
-                let driverStartTime = new modelStart();
-                driverStartTime.date = date;
-                driverStartTime.location = location;
-                driverStartTime.time = ts;
-                driverStartTime.driver = driver;
-                driverStartTime.pork = pork;
-                driverStartTime.weight = weight;
-
-                driverStartTime.save((err3) => {
-                    if (err3) {
-                        console.error(err3);
-                        return;
-                    }
-                    // res2.send("Transporter started driving!");
-                    // res2.send('<script type="text/javascript">alert("Transporter started driving!"); window.location="/driver"; </script>');
-                    res2.send('<script type="text/javascript">alert("Transporter started driving!"); window.location=history.go(-2); </script>');
-                });
-            });
-        });
     });
+
+    app.post('/driver/transportStart', (req2, res2) => {
+        driverName = req2.query.driverName;
+        model.findOne({username: driverName}, (err2, doc2) => {
+            doc2.status = "driving";
+            doc2.save();
+        });
+        modelOrder.findOne({driver: driverName}, (err, obj) => {
+            let orderID = obj.orderID;
+
+            OrderContract.methods.GetOrderInfo(orderID).call().then((result) => {
+                let orderInfo = result;
+
+                OrderContract.methods.SetOrderInfo(orderID, orderInfo[0], orderInfo[1], tstring, orderInfo[3], orderInfo[4], orderInfo[5]).send({
+                    from: '0xE9e344599890319B89c36ccc83070971fB48e776',
+                    gas:'200000',
+                    gasPrice: 200,
+                    value: 0
+                });
+                console.log("Driver start uploaded to blockchain with OrderID " + orderID);
+            });
+            // res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location="/driver"; </script>');
+            console.log("Transporter " + driverName + " started driving!");
+        });
+        res2.redirect('/driver?driverName=' + driverName);
+    });
+
 });
 
-// Renders driver/taansportEnd page
+// Renders driver/transportEnd page
 app.get('/driver/transportEnd', (req, res) => {
     let driverName = req.query.driverName;
+    let ts = Date.now();
+    let tstring = Date(ts);
 
     modelOrder.findOne({driver: driverName}, (err, obj) => {
         if (obj === null) {
             res.send('<script type="text/javascript">alert("No transport ongoing!"); window.location=history.back(); </script>');
-            res.send("No transport ongoing!");
             return;
         }
 
@@ -571,43 +614,44 @@ app.get('/driver/transportEnd', (req, res) => {
         let tstring = Date(ts);
 
         res.render('TransportEnd', {date: date, location: location, time: tstring, driver: driver, pork: pork, weight: weight});
+    });
 
-        app.post('/driver/transportEnd', (req2, res2) => {
-            model.findOne({username: driverName}, (err2, doc2) => {
-                doc2.status = "done";
-                doc2.save();
-
-                let driverEndTime = new modelDone();
-                driverEndTime.date = date;
-                driverEndTime.location = location;
-                driverEndTime.time = ts;
-                driverEndTime.driver = driver;
-                driverEndTime.pork = pork;
-                driverEndTime.weight = weight;
-
-                driverEndTime.save((err3) => {
-                    if (err3) {
-                        console.error(err3);
-                        return;
-                    }
-                    // res2.send("Transporter finished delivery!");
-                    // res2.send('<script type="text/javascript">alert("Transporter finished delivery!"); window.location="/driver"; </script>');
-                    res2.send('<script type="text/javascript">alert("Transporter finished delivery!"); window.location=history.go(-2); </script>');
-                });
-            });
+    app.post('/driver/transportEnd', (req2, res2) => {
+        driverName = req2.query.driverName;
+        model.findOne({username: driverName}, (err2, doc2) => {
+            doc2.status = "done";
+            doc2.save();
         });
+        modelOrder.findOne({driver: driverName}, (err, obj) => {
+            let orderID = obj.orderID;
+
+            OrderContract.methods.GetOrderInfo(orderID).call().then((result) => {
+                let orderInfo = result;
+
+                OrderContract.methods.SetOrderInfo(orderID, orderInfo[0], orderInfo[1], tstring, orderInfo[3], orderInfo[4], orderInfo[5]).send({
+                    from: '0xE9e344599890319B89c36ccc83070971fB48e776',
+                    gas:'200000',
+                    gasPrice: 200,
+                    value: 0
+                });
+                console.log("Driver end uploaded to blockchain with OrderID " + orderID);
+            });
+            // res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location="/driver"; </script>');
+            console.log("Transporter " + driverName + " finished delivery!");
+        });
+        res2.redirect('/driver?driverName=' + driverName);
     });
 });
+
 
 // Renders driver/return page
 app.get('/driver/return', (req, res) => {
     let driverName = req.query.driverName;
-
-    console.log("DRIVER NAME " + driverName);
+    let ts = Date.now();
+    let tstring = Date(ts);
 
     modelOrder.findOne({driver: driverName}, (err, obj) => {
         if (obj === null) {
-            res.send("No transport done!");
             res.send('<script type="text/javascript">alert("No transport done!"); window.location=history.back(); </script>');
             return;
         }
@@ -619,43 +663,42 @@ app.get('/driver/return', (req, res) => {
         let driver = obj.driver;
         let pork = obj.pork;
         let weight = obj.weight;
-        let ts = Date.now();
-        let tstring = Date(ts);
 
         res.render('Return', {date: date, location: location, time: tstring, driver: driver, pork: pork, weight: weight});
+    });
 
-        app.post('/driver/return', (req2, res2) => {
-            model.findOne({username: driverName}, (err2, doc2) => {
-                doc2.status = "ready";
-                doc2.save();
+    app.post('/driver/return', (req2, res2) => {
+        model.findOne({username: driverName}, (err, doc2) => {
+            doc2.status = "ready";
+            doc2.save();
+        });
 
-                let driverReturn = new modelReturn();
-                driverReturn.date = date;
-                driverReturn.location = location;
-                driverReturn.time = ts;
-                driverReturn.driver = driver;
-                driverReturn.pork = pork;
-                driverReturn.weight = weight;
+        modelOrder.findOne({driver: driverName}, (err, obj) => {
+            let orderID = obj.orderID;
 
-                driverReturn.save((err3) => {
-                    if (err3) {
-                        console.error(err3);
-                        return;
-                    }
+            OrderContract.methods.GetOrderInfo(orderID).call().then((result) => {
+                let orderInfo = result;
+
+                OrderContract.methods.SetOrderInfo(orderID, orderInfo[0], orderInfo[1], tstring, orderInfo[3], orderInfo[4], orderInfo[5]).send({
+                    from: '0xE9e344599890319B89c36ccc83070971fB48e776',
+                    gas:'200000',
+                    gasPrice: 200,
+                    value: 0
                 });
+                console.log("Driver end uploaded to blockchain with OrderID " + orderID);
             });
-            modelOrder.findOneAndDelete({_id: idNumber}, (err4, obj2) => {
-                if (err4) {
-                    console.error(err4);
+            // res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location="/driver"; </script>');
+            console.log("Transporter " + driverName + " finished delivery!");
+
+            modelOrder.findOneAndDelete({orderID: orderID}, (err2, obj2) => {
+                if (err2) {
+                    console.error(err2);
                     return;
                 }
                 console.log("Deleted order! " + obj2);
-                // res2.send("Transporter returned back!");
-                // res2.send('<script type="text/javascript">alert("Transporter returned back!"); window.location="/driver"; </script>');
-
             });
-            res2.send('<script type="text/javascript">alert("Transporter returned back!"); window.location=history.go(-2); </script>'); // NEEDS TO DELETE PROPERLY
         });
+        res2.redirect('/driver?driverName=' + driverName);
     });
 });
 
