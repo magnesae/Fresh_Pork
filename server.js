@@ -1,64 +1,12 @@
 const express = require('express');
 const app = express();
-const path = require('path');
-//const router = express.Router();
 const ejs = require('ejs');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 let Web3 = require('web3');
 const PORT = process.env.PORT || 3000;
 
-
 let web3 = new Web3(new Web3.providers.HttpProvider('HTTP://127.0.0.1:7545'));
-
-let ABI = [
-    {
-        "constant": true,
-        "inputs": [
-            {
-                "internalType": "string",
-                "name": "_Username",
-                "type": "string"
-            }
-        ],
-        "name": "GetUserInfo",
-        "outputs": [
-            {
-                "internalType": "string",
-                "name": "",
-                "type": "string"
-            },
-            {
-                "internalType": "string",
-                "name": "",
-                "type": "string"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "inputs": [
-            {
-                "internalType": "string",
-                "name": "_Username",
-                "type": "string"
-            },
-            {
-                "internalType": "string",
-                "name": "_Role",
-                "type": "string"
-            }
-        ],
-        "name": "SetUserInfo",
-        "outputs": [],
-        "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "function"
-    }
-];
 
 let orderABI = [
     {
@@ -154,23 +102,13 @@ let orderABI = [
     }
 ];
 
-let CA = "0x44263a3aD20177E70db5F997618aa4a3471ef1d3";
-
 let orderCA = "0x3ba51a2D42246f9177d23663FAc3a4beb8cFF0ee";
-
-let Contract = new web3.eth.Contract(ABI, CA);
 
 let OrderContract = new web3.eth.Contract(orderABI, orderCA);
 
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({extended:true}));
 app.use(bodyParser.json());
-
-let temp_date = new Date();
-
-let db_date = temp_date.getFullYear() + '/' + parseInt(temp_date.getMonth()+1) + '/' +
-    temp_date.getDate() + " " + temp_date.getHours() + ":" + temp_date.getMinutes() + ":" +
-    temp_date.getSeconds();
 
 mongoose.connect('mongodb://localhost:27017/testDB');
 const db = mongoose.connection;
@@ -191,21 +129,8 @@ const orderSchema = new mongoose.Schema({
     weight: String
 });
 
-const driverLocation = new mongoose.Schema({
-    orderID: String,
-    date: Date,
-    location: String,
-    time: Number,
-    driver: String,
-    pork: String,
-    weight: String
-});
-
 const model = mongoose.model("Register", registerSchema, 'register');
 const modelOrder = mongoose.model( "Order", orderSchema, 'order');
-// const modelStart = mongoose.model( "TransportStartTime", driverLocation, 'driverLocation');
-// const modelDone = mongoose.model( "TransportDoneTime", driverLocation, 'driverLocation');
-// const modelReturn = mongoose.model( "ReturnTime", driverLocation, 'driverLocation');
 
 // Renders first login page
 app.get('/', (req, res) => {
@@ -228,7 +153,6 @@ app.post('/', (req, res) => {
         }
 
         model.find({ username: info.id, password: info.password }, (err, item) => {
-
             let data = JSON.stringify(item);
 
             if (data === '[]') {
@@ -267,7 +191,6 @@ app.post('/checkOrder', (req, res) => {
 app.get('/checkOrder', (req, res) => {
 
     let orderNumber = req.query.orderNumber;
-
     OrderContract.methods.GetOrderInfo(orderNumber).call().then((result) => {
         let orderInfo = result;
 
@@ -325,13 +248,6 @@ app.post('/registerUser', (req, res) => {
                     res.send('<script type="text/javascript">alert("Form is registered"); window.location="/"; </script>');
                     // res.send("Form is registered");
                 });
-                Contract.methods.SetUserInfo(registerForm.username, registerForm.role).send({
-                    from: '0xE9e344599890319B89c36ccc83070971fB48e776',
-                    gas:'200000',
-                    gasPrice: 200,
-                    value: 0
-                }); // This does not work
-                Contract.methods.GetUserInfo(registerForm.username).call().then(console.log);
             }
             else {
                 // res.send("Username already exists");
@@ -357,12 +273,6 @@ app.post('/registerOrder', (req, res) => {
         registerForm.driver = req.body.driver;
         registerForm.pork = req.body.pork;
         registerForm.weight = req.body.weight;
-
-        console.log("Register Form DATE: " + registerForm.date);
-        console.log("Register Form LOCATION: " + registerForm.location);
-        console.log("Register Form DRIVER: " + registerForm.driver);
-        console.log("Register Form PORK: " + registerForm.pork);
-        console.log("Register Form WEIGHT: " + registerForm.weight);
 
         let randomNumber = Math.floor(Math.random() * 1000000) + 1;
 
@@ -420,7 +330,6 @@ app.post('/registerOrder', (req, res) => {
             gasPrice: 200,
             value: 0
         });
-
         res.redirect('/confirm?driverName=' + registerForm.driver);
     }
     if (inputValue === "Cancel") {
@@ -441,8 +350,6 @@ app.post('/confirm', (req, res) => {
         res.redirect('/');
     }
 });
-
-
 
 // Renders post request for /driver page
 app.post('/driver', (req, res) => {
@@ -496,6 +403,7 @@ app.post('/driver', (req, res) => {
     });
 });
 
+// Renders driver/assign page
 app.get('/driver/assign', (req, res) => {
     let driverName = req.query.driverName;
     let ts = Date.now();
@@ -537,7 +445,6 @@ app.get('/driver/assign', (req, res) => {
                 });
                 console.log("Driver assign uploaded to blockchain with OrderID " + orderID);
             });
-        // res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location="/driver"; </script>');
         console.log("Order confirmed for " + driverName);
         });
         res2.redirect('/driver?driverName=' + driverName);
@@ -585,7 +492,6 @@ app.get('/driver/transportStart', (req, res) => {
                 });
                 console.log("Driver start uploaded to blockchain with OrderID " + orderID);
             });
-            // res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location="/driver"; </script>');
             console.log("Transporter " + driverName + " started driving!");
         });
         res2.redirect('/driver?driverName=' + driverName);
@@ -636,7 +542,6 @@ app.get('/driver/transportEnd', (req, res) => {
                 });
                 console.log("Driver end uploaded to blockchain with OrderID " + orderID);
             });
-            // res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location="/driver"; </script>');
             console.log("Transporter " + driverName + " finished delivery!");
         });
         res2.redirect('/driver?driverName=' + driverName);
@@ -687,7 +592,6 @@ app.get('/driver/return', (req, res) => {
                 });
                 console.log("Driver end uploaded to blockchain with OrderID " + orderID);
             });
-            // res2.send('<script type="text/javascript">alert("Order confirmed!"); window.location="/driver"; </script>');
             console.log("Transporter " + driverName + " finished delivery!");
 
             modelOrder.findOneAndDelete({orderID: orderID}, (err2, obj2) => {
@@ -701,7 +605,6 @@ app.get('/driver/return', (req, res) => {
         res2.redirect('/driver?driverName=' + driverName);
     });
 });
-
 
 // Renders register user page
 app.get('/registerUser', (req, res) => {
