@@ -196,9 +196,36 @@ app.get('/checkOrder', (req, res) => {
 
         let time = orderInfo[2];
         if (time === "0") {
-            time = "Driver has yet to confirm the order";
+            time = "-";
         }
+        if (orderInfo[0] === "" || orderInfo[1] === "" || orderInfo[3] === "" || orderInfo[4] === "" || orderInfo[5] === "") {
+            res.send('<script type="text/javascript">alert("The provided Order Number is incorrect!"); window.location=history.back(); </script>');
+        }
+
+        // let status = "";
+        //
+        // modelOrder.findOne({orderID: orderNumber}, (err, obj) => {
+        //     let driver = obj.driver;
+        //     model.findOne( {username: driver}, (err2, doc) => {
+        //         if (doc.status === "confirmed") {
+        //             status = "Driver has yet to confirm the order!";
+        //         }
+        //         if (doc.status === "assigned") {
+        //             status = "Driver has confirmed the order!";
+        //         }
+        //         if (doc.status === "driving") {
+        //              status = "Driver has started the delivery!";
+        //         }
+        //         if (doc.status === "done") {
+        //             status = "Driver has finished the delivery!";
+        //         }
+        //     });
+        // });
+        //
+        // console.log("STATUS: " + status)
+
         res.render('CheckOrder', {ordernumber: orderNumber, date: orderInfo[0], location: orderInfo[1], time: time, driver: orderInfo[3], pork: orderInfo[4], weight: orderInfo[5]});
+
     });
 });
 
